@@ -1,50 +1,45 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 
-// ============================================
-// SUPABASE CONFIG
-// ============================================
 const SUPABASE_URL = "https://wqwzoklpnwhqepthlkcu.supabase.co";
 const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indxd3pva2xwbndocWVwdGhsa2N1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI0MTEzNTMsImV4cCI6MjA4Nzk4NzM1M30.oHrJ9jvwZtBv39sTeyh9Yf00Wdht6TGRDbubc-7iZp8";
 
 const supaFetch = async (path, options = {}) => {
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-    headers: {
-      "apikey": SUPABASE_KEY,
-      "Authorization": `Bearer ${SUPABASE_KEY}`,
-      "Content-Type": "application/json",
-      "Prefer": options.prefer || "return=representation",
-      ...options.headers,
-    },
+    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", "Prefer": options.prefer || "return=representation", ...options.headers },
     method: options.method || "GET",
     body: options.body ? JSON.stringify(options.body) : undefined,
   });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err);
-  }
+  if (!res.ok) { const err = await res.text(); throw new Error(err); }
   const text = await res.text();
   return text ? JSON.parse(text) : null;
 };
 
-// Simple localStorage wrapper for session persistence
 const storage = {
   get: (key) => { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch { return null; } },
   set: (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} },
   remove: (key) => { try { localStorage.removeItem(key); } catch {} },
 };
 
-// ============================================
-// HELPERS
-// ============================================
 const getToday = () => new Date().toISOString().split("T")[0];
 const getMonthDays = (year, month) => Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, i) => i + 1);
 const MONTH_NAMES = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAY_NAMES = ["S", "M", "T", "W", "T", "F", "S"];
 const genCode = () => String(Math.floor(1000 + Math.random() * 9000));
 
-// ============================================
-// COMPONENTS
-// ============================================
+// Send SMS via our API route
+const sendNudgeSMS = async (toPhone, senderName, taskTitle) => {
+  try {
+    const res = await fetch("/api/nudge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        to: `+1${toPhone.replace(/\D/g, "")}`,
+        message: `👊 ${senderName} nudged you: "${taskTitle}" — get it done!`,
+      }),
+    });
+    return res.ok;
+  } catch { return false; }
+};
 
 function NudgePopup({ message, onClose }) {
   useEffect(() => { const t = setTimeout(onClose, 3500); return () => clearTimeout(t); }, [onClose]);
@@ -67,7 +62,6 @@ function MiniProgress({ completed, target, color, height = 6 }) {
 function TaskCard({ task, isOwn, accentColor, onIncrement, onDecrement, onNudge, nudging, onDelete }) {
   const isDone = task.completed >= task.target;
   const [showActions, setShowActions] = useState(false);
-
   return (
     <div style={{ background: isDone ? `${accentColor}0a` : "rgba(255,255,255,0.03)", border: isDone ? `1px solid ${accentColor}22` : "1px solid rgba(255,255,255,0.06)", borderRadius: 16, padding: "14px 16px", marginBottom: 10, transition: "all 0.3s ease" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -83,11 +77,11 @@ function TaskCard({ task, isOwn, accentColor, onIncrement, onDecrement, onNudge,
           {isOwn && !isDone && (
             <>
               {task.completed > 0 && <button onClick={() => onDecrement(task.id)} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.5)", width: 32, height: 32, borderRadius: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>−</button>}
-              <button onClick={() => onIncrement(task.id)} style={{ background: accentColor, border: "none", color: "#fff", width: 32, height: 32, borderRadius: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, boxShadow: `0 4px 12px ${accentColor}33`, transition: "transform 0.15s ease" }} onMouseEnter={e => e.target.style.transform = "scale(1.08)"} onMouseLeave={e => e.target.style.transform = "scale(1)"}>+</button>
+              <button onClick={() => onIncrement(task.id)} style={{ background: accentColor, border: "none", color: "#fff", width: 32, height: 32, borderRadius: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, boxShadow: `0 4px 12px ${accentColor}33` }}>+</button>
             </>
           )}
           {isOwn && isDone && <span style={{ fontSize: 11, color: accentColor, fontWeight: 600, fontFamily: "'DM Sans', sans-serif" }}>Done!</span>}
-          {!isOwn && !isDone && <button onClick={() => onNudge(task)} disabled={nudging} style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "7px 12px", borderRadius: 9, cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", opacity: nudging ? 0.5 : 1 }}>👊 Nudge</button>}
+          {!isOwn && !isDone && <button onClick={() => onNudge(task)} disabled={nudging} style={{ background: nudging ? `${accentColor}33` : "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "7px 12px", borderRadius: 9, cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", opacity: nudging ? 0.5 : 1 }}>{nudging ? "Sent!" : "👊 Nudge"}</button>}
         </div>
       </div>
       <MiniProgress completed={task.completed} target={task.target} color={accentColor} />
@@ -107,7 +101,6 @@ function AddTaskModal({ onAdd, onClose, accentColor }) {
   const [recurring, setRecurring] = useState(true);
   const inputStyle = { width: "100%", padding: "12px 14px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, color: "#fff", fontSize: 14, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box" };
   const handleAdd = () => { if (title.trim() && Number(target) > 0) { onAdd({ title: title.trim(), target: Number(target), unit, recurring, completed: 0 }); onClose(); } };
-
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.7)", backdropFilter: "blur(8px)", zIndex: 998, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()} style={{ background: "#1a1a2e", borderRadius: 20, padding: 24, width: "100%", maxWidth: 340, border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 24px 48px rgba(0,0,0,0.5)" }}>
@@ -154,7 +147,6 @@ function RecapScreen({ userId, accentColor, onClose }) {
   const [history, setHistory] = useState({});
   const [taskTitles, setTaskTitles] = useState([]);
   const [loading, setLoading] = useState(true);
-
   const days = getMonthDays(viewYear, viewMonth);
   const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
 
@@ -166,11 +158,7 @@ function RecapScreen({ userId, accentColor, onClose }) {
         const data = await supaFetch(`task_history?user_id=eq.${userId}&date=like.${monthStr}*`);
         const grouped = {};
         const titles = new Set();
-        (data || []).forEach(entry => {
-          if (!grouped[entry.date]) grouped[entry.date] = [];
-          grouped[entry.date].push(entry);
-          titles.add(entry.title);
-        });
+        (data || []).forEach(entry => { if (!grouped[entry.date]) grouped[entry.date] = []; grouped[entry.date].push(entry); titles.add(entry.title); });
         setHistory(grouped);
         setTaskTitles(Array.from(titles));
       } catch (e) { console.error(e); }
@@ -206,15 +194,11 @@ function RecapScreen({ userId, accentColor, onClose }) {
           <span style={{ fontSize: 16, fontWeight: 700, color: "#fff" }}>{MONTH_NAMES[viewMonth]} {viewYear}</span>
           <button onClick={nextMonth} style={{ background: "rgba(255,255,255,0.06)", border: "none", color: "#fff", width: 36, height: 36, borderRadius: 10, cursor: "pointer", fontSize: 16 }}>→</button>
         </div>
-        {loading ? (
-          <div style={{ textAlign: "center", padding: 40, color: "rgba(255,255,255,0.3)" }}>Loading...</div>
-        ) : (
+        {loading ? <div style={{ textAlign: "center", padding: 40, color: "rgba(255,255,255,0.3)" }}>Loading...</div> : (
           <>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 20 }}>
-              <button onClick={() => setSelectedTask("all")} style={{ padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", background: selectedTask === "all" ? accentColor : "rgba(255,255,255,0.06)", color: selectedTask === "all" ? "#fff" : "rgba(255,255,255,0.5)" }}>All Tasks</button>
-              {taskTitles.map(t => (
-                <button key={t} onClick={() => setSelectedTask(t)} style={{ padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", background: selectedTask === t ? accentColor : "rgba(255,255,255,0.06)", color: selectedTask === t ? "#fff" : "rgba(255,255,255,0.5)" }}>{t}</button>
-              ))}
+              <button onClick={() => setSelectedTask("all")} style={{ padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", background: selectedTask === "all" ? accentColor : "rgba(255,255,255,0.06)", color: selectedTask === "all" ? "#fff" : "rgba(255,255,255,0.5)" }}>All</button>
+              {taskTitles.map(t => <button key={t} onClick={() => setSelectedTask(t)} style={{ padding: "6px 12px", borderRadius: 8, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "'DM Sans', sans-serif", background: selectedTask === t ? accentColor : "rgba(255,255,255,0.06)", color: selectedTask === t ? "#fff" : "rgba(255,255,255,0.5)" }}>{t}</button>)}
             </div>
             <div style={{ display: "flex", gap: 10, marginBottom: 24 }}>
               {[{ val: monthStats.completedDays, label: "Days Hit" }, { val: monthStats.totalDays > 0 ? Math.round((monthStats.completedDays / monthStats.totalDays) * 100) + "%" : "0%", label: "Rate" }, { val: monthStats.totalCompletions, label: "Total" }].map((s, i) => (
@@ -261,14 +245,13 @@ function RecapScreen({ userId, accentColor, onClose }) {
 
 function LoginScreen({ onLogin }) {
   const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
   const [partnerCode, setPartnerCode] = useState("");
   const [myCode, setMyCode] = useState("");
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
   useEffect(() => { setMyCode(genCode()); }, []);
-
   const inputStyle = { width: "100%", padding: "14px 16px", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, color: "#fff", fontSize: 16, fontFamily: "'DM Sans', sans-serif", outline: "none", boxSizing: "border-box", textAlign: "center" };
 
   const handleStart = async () => {
@@ -278,17 +261,14 @@ function LoginScreen({ onLogin }) {
     try {
       const users = await supaFetch("users", {
         method: "POST",
-        body: { name: name.trim(), pair_code: myCode, partner_code: partnerCode.trim() },
+        body: { name: name.trim(), pair_code: myCode, partner_code: partnerCode.trim(), phone: phone.replace(/\D/g, "") },
       });
       if (users && users[0]) {
         const partners = await supaFetch(`users?pair_code=eq.${partnerCode.trim()}`);
         if (partners && partners.length > 0) {
-          await supaFetch(`users?id=eq.${partners[0].id}`, {
-            method: "PATCH",
-            body: { partner_code: myCode },
-          });
+          await supaFetch(`users?id=eq.${partners[0].id}`, { method: "PATCH", body: { partner_code: myCode } });
         }
-        const userData = { ...users[0], partnerId: partners?.[0]?.id || null, partnerName: partners?.[0]?.name || "Partner" };
+        const userData = { ...users[0], partnerId: partners?.[0]?.id || null, partnerName: partners?.[0]?.name || "Partner", partnerPhone: partners?.[0]?.phone || "" };
         storage.set("nm-session", userData);
         onLogin(userData);
       }
@@ -306,14 +286,13 @@ function LoginScreen({ onLogin }) {
         <div style={{ fontSize: 48, marginBottom: 8 }}>👊</div>
         <h1 style={{ fontSize: 26, fontWeight: 700, color: "#fff", margin: "0 0 6px" }}>Needle Movers</h1>
         <p style={{ fontSize: 13, color: "rgba(255,255,255,0.4)", margin: "0 0 36px", lineHeight: 1.5 }}>Accountability partner app.<br />Set tasks. Track progress. Nudge each other.</p>
-
         {step === 1 && (
           <>
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" style={inputStyle} />
-            <button onClick={() => { if (name.trim()) setStep(2); }} style={{ width: "100%", padding: "14px", border: "none", borderRadius: 12, background: name.trim() ? "#E8573A" : "rgba(255,255,255,0.08)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 12, fontFamily: "'DM Sans', sans-serif", boxShadow: name.trim() ? "0 4px 16px rgba(232,87,58,0.3)" : "none" }}>Continue</button>
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" style={{ ...inputStyle, marginBottom: 10 }} />
+            <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="Your phone (e.g. 6475889761)" type="tel" style={inputStyle} />
+            <button onClick={() => { if (name.trim() && phone.replace(/\D/g, "").length >= 10) setStep(2); }} style={{ width: "100%", padding: "14px", border: "none", borderRadius: 12, background: (name.trim() && phone.replace(/\D/g, "").length >= 10) ? "#E8573A" : "rgba(255,255,255,0.08)", color: "#fff", fontSize: 15, fontWeight: 600, cursor: "pointer", marginTop: 12, fontFamily: "'DM Sans', sans-serif", boxShadow: name.trim() ? "0 4px 16px rgba(232,87,58,0.3)" : "none" }}>Continue</button>
           </>
         )}
-
         {step === 2 && (
           <>
             <div style={{ background: "rgba(255,255,255,0.04)", borderRadius: 14, padding: 20, border: "1px solid rgba(255,255,255,0.06)", marginBottom: 20 }}>
@@ -331,10 +310,6 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-// ============================================
-// MAIN APP
-// ============================================
-
 export default function App() {
   const [user, setUser] = useState(null);
   const [myTasks, setMyTasks] = useState([]);
@@ -350,7 +325,6 @@ export default function App() {
   const partnerColor = "#3A7BE8";
   const today = getToday();
 
-  // Check for saved session
   useEffect(() => {
     const load = async () => {
       try {
@@ -361,14 +335,12 @@ export default function App() {
             const u = users[0];
             let partnerId = saved.partnerId;
             let partnerName = saved.partnerName;
+            let partnerPhone = saved.partnerPhone;
             if (u.partner_code) {
               const partners = await supaFetch(`users?pair_code=eq.${u.partner_code}`);
-              if (partners && partners.length > 0) {
-                partnerId = partners[0].id;
-                partnerName = partners[0].name;
-              }
+              if (partners && partners.length > 0) { partnerId = partners[0].id; partnerName = partners[0].name; partnerPhone = partners[0].phone || ""; }
             }
-            const userData = { ...saved, partnerId, partnerName };
+            const userData = { ...saved, partnerId, partnerName, partnerPhone };
             storage.set("nm-session", userData);
             setUser(userData);
           }
@@ -379,7 +351,6 @@ export default function App() {
     load();
   }, []);
 
-  // Load tasks
   const loadTasks = useCallback(async () => {
     if (!user) return;
     setSyncing(true);
@@ -395,54 +366,38 @@ export default function App() {
   }, [user, today]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
-
-  // Poll every 10s
-  useEffect(() => {
-    if (!user) return;
-    const interval = setInterval(loadTasks, 10000);
-    return () => clearInterval(interval);
-  }, [user, loadTasks]);
+  useEffect(() => { if (!user) return; const i = setInterval(loadTasks, 10000); return () => clearInterval(i); }, [user, loadTasks]);
 
   const handleLogin = useCallback((userData) => { setUser(userData); setLoading(false); }, []);
 
   const handleAddTask = useCallback(async (task) => {
     if (!user) return;
     try {
-      const newTask = await supaFetch("tasks", {
-        method: "POST",
-        body: { user_id: user.id, title: task.title, target: task.target, completed: 0, unit: task.unit, recurring: task.recurring, date: today },
-      });
+      const newTask = await supaFetch("tasks", { method: "POST", body: { user_id: user.id, title: task.title, target: task.target, completed: 0, unit: task.unit, recurring: task.recurring, date: today } });
       if (newTask) setMyTasks(prev => [...prev, ...newTask]);
-      await supaFetch("task_history", {
-        method: "POST",
-        body: { user_id: user.id, title: task.title, target: task.target, completed: 0, unit: task.unit, date: today },
-      });
+      await supaFetch("task_history", { method: "POST", body: { user_id: user.id, title: task.title, target: task.target, completed: 0, unit: task.unit, date: today } });
     } catch (e) { console.error(e); }
   }, [user, today]);
 
   const handleIncrement = useCallback(async (taskId) => {
     const task = myTasks.find(t => t.id === taskId);
     if (!task || task.completed >= task.target) return;
-    const newCompleted = task.completed + 1;
-    setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t));
+    const nc = task.completed + 1;
+    setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: nc } : t));
     try {
-      await supaFetch(`tasks?id=eq.${taskId}`, { method: "PATCH", body: { completed: newCompleted } });
-      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${today}`, {
-        method: "PATCH", body: { completed: newCompleted },
-      });
+      await supaFetch(`tasks?id=eq.${taskId}`, { method: "PATCH", body: { completed: nc } });
+      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${today}`, { method: "PATCH", body: { completed: nc } });
     } catch (e) { console.error(e); }
   }, [myTasks, user, today]);
 
   const handleDecrement = useCallback(async (taskId) => {
     const task = myTasks.find(t => t.id === taskId);
     if (!task || task.completed <= 0) return;
-    const newCompleted = task.completed - 1;
-    setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: newCompleted } : t));
+    const nc = task.completed - 1;
+    setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: nc } : t));
     try {
-      await supaFetch(`tasks?id=eq.${taskId}`, { method: "PATCH", body: { completed: newCompleted } });
-      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${today}`, {
-        method: "PATCH", body: { completed: newCompleted },
-      });
+      await supaFetch(`tasks?id=eq.${taskId}`, { method: "PATCH", body: { completed: nc } });
+      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${today}`, { method: "PATCH", body: { completed: nc } });
     } catch (e) { console.error(e); }
   }, [myTasks, user, today]);
 
@@ -451,18 +406,23 @@ export default function App() {
     try { await supaFetch(`tasks?id=eq.${taskId}`, { method: "DELETE" }); } catch (e) { console.error(e); }
   }, []);
 
-  const handleNudge = useCallback((task) => {
+  const handleNudge = useCallback(async (task) => {
+    if (!user?.partnerPhone) {
+      setNudgeMsg("Partner has no phone number saved");
+      return;
+    }
     setNudgingId(task.id);
-    setNudgeMsg(`Nudge sent for "${task.title}" 💪`);
-    setTimeout(() => setNudgingId(null), 2000);
-  }, []);
+    setNudgeMsg("Sending nudge...");
+    const success = await sendNudgeSMS(user.partnerPhone, user.name, task.title);
+    if (success) {
+      setNudgeMsg(`Text sent to ${user.partnerName}: "${task.title}" 👊`);
+    } else {
+      setNudgeMsg("Nudge failed — check phone number");
+    }
+    setTimeout(() => setNudgingId(null), 3000);
+  }, [user]);
 
-  const handleLogout = useCallback(() => {
-    storage.remove("nm-session");
-    setUser(null);
-    setMyTasks([]);
-    setPartnerTasks([]);
-  }, []);
+  const handleLogout = useCallback(() => { storage.remove("nm-session"); setUser(null); setMyTasks([]); setPartnerTasks([]); }, []);
 
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -478,9 +438,7 @@ export default function App() {
       <style>{`
         @keyframes slideDown { from { opacity: 0; transform: translate(-50%, -20px); } to { opacity: 1; transform: translate(-50%, 0); } }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-        * { box-sizing: border-box; }
-        ::-webkit-scrollbar { display: none; }
-        select option { background: #1a1a2e; color: #fff; }
+        * { box-sizing: border-box; } ::-webkit-scrollbar { display: none; } select option { background: #1a1a2e; color: #fff; }
       `}</style>
 
       {nudgeMsg && <NudgePopup message={nudgeMsg} onClose={() => setNudgeMsg(null)} />}
