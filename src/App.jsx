@@ -619,10 +619,10 @@ export default function App() {
     setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: nc } : t));
     try {
       await supaFetch(`tasks?id=eq.${taskId}`, { method:"PATCH", body:{ completed:nc } });
-      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${getToday()}`, { method:"PATCH", body:{ completed:nc } });
+      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${viewDate}`, { method:"PATCH", body:{ completed:nc } });
     } catch (e) { console.error(e); }
     if (nc >= task.target) { setTimePrompt(taskId); }
-  }, [myTasks, user]);
+  }, [myTasks, user, viewDate]);
 
   const handleDecrement = useCallback(async (taskId) => {
     const task = myTasks.find(t => t.id === taskId);
@@ -631,9 +631,9 @@ export default function App() {
     setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, completed: nc } : t));
     try {
       await supaFetch(`tasks?id=eq.${taskId}`, { method:"PATCH", body:{ completed:nc } });
-      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${getToday()}`, { method:"PATCH", body:{ completed:nc } });
+      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${viewDate}`, { method:"PATCH", body:{ completed:nc } });
     } catch (e) { console.error(e); }
-  }, [myTasks, user]);
+  }, [myTasks, user, viewDate]);
 
   const handleDeleteTask = useCallback(async (taskId) => {
     setMyTasks(prev => prev.filter(t => t.id !== taskId));
@@ -646,9 +646,9 @@ export default function App() {
     setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, failed: true } : t));
     try {
       await supaFetch(`tasks?id=eq.${taskId}`, { method:"PATCH", body:{ failed:true } });
-      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${getToday()}`, { method:"PATCH", body:{ failed:true } });
+      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${viewDate}`, { method:"PATCH", body:{ failed:true } });
     } catch (e) { console.error(e); }
-  }, [myTasks, user]);
+  }, [myTasks, user, viewDate]);
 
   const handleTimeSpent = useCallback(async (taskId, timeStr) => {
     if (!user) return;
@@ -659,9 +659,9 @@ export default function App() {
     if (!timeStr) return;
     try {
       await supaFetch(`tasks?id=eq.${taskId}`, { method:"PATCH", body:{ time_spent: timeStr } });
-      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${getToday()}`, { method:"PATCH", body:{ time_spent: timeStr } });
+      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${viewDate}`, { method:"PATCH", body:{ time_spent: timeStr } });
     } catch (e) { console.error(e); }
-  }, [myTasks, user]);
+  }, [myTasks, user, viewDate]);
 
   const handleReact = useCallback(async (taskId, emoji) => {
     if (!user) return;
@@ -778,14 +778,14 @@ export default function App() {
               {!isViewingToday && viewDate > getToday() && <span style={{ fontSize:9,fontWeight:600,color:myColor,fontFamily:"'DM Sans',sans-serif" }}>SCHEDULED</span>}
             </div>
             {myTasks.length === 0 && <div style={{ textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.25)",fontSize:13 }}>No tasks yet - add your first needle mover</div>}
-            {myTasks.map(task => <TaskCard key={task.id} task={task} isOwn={isViewingToday} accentColor={myColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onFail={handleFail} onReact={handleReact} reactions={reactions} />)}
+            {myTasks.map(task => <TaskCard key={task.id} task={task} isOwn={viewDate >= getToday()} accentColor={myColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onFail={handleFail} onReact={handleReact} reactions={reactions} />)}
             <button onClick={() => { setAddTaskDate(viewDate); setShowAddTask(true); }} style={{ width:"100%",padding:"13px",border:"1px dashed rgba(255,255,255,0.12)",borderRadius:14,background:"transparent",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>+ Add Needle Mover</button>
           </>
         )}
         {tab === "partner" && (
           <>
             <div style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase",marginBottom:12 }}>{user.partnerName || "Partner"}'s Needle Movers</div>
-            {partnerTasks.length === 0 && <div style={{ textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.25)",fontSize:13 }}>{user.partnerId?"Your partner hasn't set tasks yet today":"No partner connected yet - share your code!"}</div>}
+            {partnerTasks.length === 0 && <div style={{ textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.25)",fontSize:13 }}>{user.partnerId?"No tasks for this day":"No partner connected yet - share your code!"}</div>}
             {partnerTasks.map(task => <TaskCard key={task.id} task={task} isOwn={false} accentColor={partnerColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onFail={handleFail} onReact={handleReact} reactions={reactions} />)}
             {!user.partnerId && (
               <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:14,padding:20,textAlign:"center",border:"1px solid rgba(255,255,255,0.06)",marginTop:16 }}>
