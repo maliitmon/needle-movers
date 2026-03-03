@@ -68,35 +68,40 @@ function MiniProgress({ completed, target, color, height = 6 }) {
   );
 }
 
-function TaskCard({ task, isOwn, accentColor, onIncrement, onDecrement, onNudge, nudging, onDelete, onReact, reactions }) {
+function TaskCard({ task, isOwn, accentColor, onIncrement, onDecrement, onNudge, nudging, onDelete, onFail, onReact, reactions }) {
   const isDone = task.completed >= task.target;
+  const isFailed = task.failed;
   const [showActions, setShowActions] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
   const taskReactions = reactions?.filter(r => r.task_id === task.id) || [];
   const createdLabel = formatCreatedDate(task.created_at);
   return (
-    <div style={{ background:isDone?`${accentColor}0a`:"rgba(255,255,255,0.03)",border:isDone?`1px solid ${accentColor}22`:"1px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"14px 16px",marginBottom:10,transition:"all 0.3s ease" }}>
+    <div style={{ background:isFailed?"rgba(255,80,80,0.05)":isDone?`${accentColor}0a`:"rgba(255,255,255,0.03)",border:isFailed?"1px solid rgba(255,80,80,0.15)":isDone?`1px solid ${accentColor}22`:"1px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"14px 16px",marginBottom:10,transition:"all 0.3s ease" }}>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
         <div style={{ flex:1,cursor:isOwn?"pointer":"default" }} onClick={() => isOwn && setShowActions(!showActions)}>
           <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
             {isDone && <span style={{ fontSize:14,color:accentColor }}>✓</span>}
-            <span style={{ fontSize:14,fontWeight:600,color:isDone?"rgba(255,255,255,0.5)":"#fff",textDecoration:isDone?"line-through":"none",fontFamily:"'DM Sans',sans-serif" }}>{task.title}</span>
+            {isFailed && <span style={{ fontSize:14,color:"#ff5050" }}>✗</span>}
+            <span style={{ fontSize:14,fontWeight:600,color:isFailed?"rgba(255,255,255,0.35)":isDone?"rgba(255,255,255,0.5)":"#fff",textDecoration:(isDone||isFailed)?"line-through":"none",fontFamily:"'DM Sans',sans-serif" }}>{task.title}</span>
             {task.recurring && <span style={{ fontSize:9,fontWeight:700,color:accentColor,background:`${accentColor}15`,padding:"2px 6px",borderRadius:4,letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif" }}>DAILY</span>}
+            {isFailed && <span style={{ fontSize:9,fontWeight:700,color:"#ff5050",background:"rgba(255,80,80,0.1)",padding:"2px 6px",borderRadius:4,letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif" }}>FAILED</span>}
           </div>
           <div style={{ display:"flex",alignItems:"center",gap:8,marginTop:3 }}>
             <span style={{ fontSize:12,color:"rgba(255,255,255,0.35)",fontFamily:"'DM Sans',sans-serif" }}>{task.completed} / {task.target} {task.unit}</span>
             {createdLabel && <span style={{ fontSize:10,color:"rgba(255,255,255,0.2)",fontFamily:"'DM Sans',sans-serif" }}>· {createdLabel}</span>}
+            {task.time_spent && <span style={{ fontSize:10,color:accentColor,fontFamily:"'DM Sans',sans-serif" }}>· {task.time_spent}</span>}
           </div>
         </div>
         <div style={{ display:"flex",alignItems:"center",gap:6,flexShrink:0 }}>
-          {isOwn && !isDone && (
+          {isOwn && !isDone && !isFailed && (
             <>
               {task.completed > 0 && <button onClick={() => onDecrement(task.id)} style={{ background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",width:32,height:32,borderRadius:9,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700 }}>−</button>}
               <button onClick={() => onIncrement(task.id)} style={{ background:accentColor,border:"none",color:"#fff",width:32,height:32,borderRadius:9,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,boxShadow:`0 4px 12px ${accentColor}33` }}>+</button>
             </>
           )}
           {isOwn && isDone && <span style={{ fontSize:11,color:accentColor,fontWeight:600,fontFamily:"'DM Sans',sans-serif" }}>Done!</span>}
-          {!isOwn && !isDone && <button onClick={() => onNudge(task)} disabled={nudging} style={{ background:nudging?`${accentColor}33`:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#fff",padding:"7px 12px",borderRadius:9,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"'DM Sans',sans-serif",opacity:nudging?0.5:1 }}>{nudging?"Sent!":"👊 Nudge"}</button>}
+          {isOwn && isFailed && <span style={{ fontSize:11,color:"#ff5050",fontWeight:600,fontFamily:"'DM Sans',sans-serif" }}>Failed</span>}
+          {!isOwn && !isDone && !isFailed && <button onClick={() => onNudge(task)} disabled={nudging} style={{ background:nudging?`${accentColor}33`:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#fff",padding:"7px 12px",borderRadius:9,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"'DM Sans',sans-serif",opacity:nudging?0.5:1 }}>{nudging?"Sent!":"👊 Nudge"}</button>}
           {!isOwn && isDone && <button onClick={() => setShowReactions(!showReactions)} style={{ background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#fff",padding:"7px 10px",borderRadius:9,cursor:"pointer",fontSize:14 }}>😊</button>}
         </div>
       </div>
@@ -112,7 +117,8 @@ function TaskCard({ task, isOwn, accentColor, onIncrement, onDecrement, onNudge,
       )}
       <MiniProgress completed={task.completed} target={task.target} color={accentColor} />
       {isOwn && showActions && (
-        <div style={{ marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.06)",display:"flex",justifyContent:"flex-end" }}>
+        <div style={{ marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.06)",display:"flex",justifyContent:"flex-end",gap:8 }}>
+          {!isDone && !isFailed && <button onClick={() => onFail(task.id)} style={{ background:"rgba(255,160,0,0.1)",border:"1px solid rgba(255,160,0,0.2)",color:"#ffa000",padding:"5px 12px",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>Mark Failed</button>}
           <button onClick={() => onDelete(task.id)} style={{ background:"rgba(255,80,80,0.1)",border:"1px solid rgba(255,80,80,0.2)",color:"#ff5050",padding:"5px 12px",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>Delete Task</button>
         </div>
       )}
@@ -467,6 +473,24 @@ function LogoutConfirm({ onConfirm, onCancel }) {
 }
 
 
+function TimePromptModal({ task, onSubmit, onSkip, accentColor }) {
+  const [time, setTime] = useState("");
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",backdropFilter:"blur(8px)",zIndex:998,display:"flex",alignItems:"center",justifyContent:"center",padding:20 }} onClick={onSkip}>
+      <div onClick={e => e.stopPropagation()} style={{ background:"#1a1a2e",borderRadius:20,padding:24,width:"100%",maxWidth:300,border:"1px solid rgba(255,255,255,0.08)",boxShadow:"0 24px 48px rgba(0,0,0,0.5)",textAlign:"center" }}>
+        <div style={{ fontSize:28,marginBottom:8 }}>{"\u2705"}</div>
+        <h3 style={{ margin:"0 0 4px",fontSize:16,fontWeight:700,color:"#fff",fontFamily:"'DM Sans',sans-serif" }}>{task?.title} done!</h3>
+        <p style={{ fontSize:12,color:"rgba(255,255,255,0.4)",margin:"0 0 16px",fontFamily:"'DM Sans',sans-serif" }}>How long did it take?</p>
+        <input value={time} onChange={e => setTime(e.target.value)} placeholder="e.g. 45 min, 2 hrs" onKeyDown={e => e.key === "Enter" && time.trim() && onSubmit(time.trim())} style={{ width:"100%",padding:"12px 14px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,color:"#fff",fontSize:14,fontFamily:"'DM Sans',sans-serif",outline:"none",boxSizing:"border-box",textAlign:"center",marginBottom:14 }} autoFocus />
+        <div style={{ display:"flex",gap:10 }}>
+          <button onClick={onSkip} style={{ flex:1,padding:"11px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,color:"rgba(255,255,255,0.5)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>Skip</button>
+          <button onClick={() => time.trim() && onSubmit(time.trim())} style={{ flex:1,padding:"11px",background:accentColor,border:"none",borderRadius:12,color:"#fff",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:`0 4px 16px ${accentColor}33`,opacity:time.trim()?1:0.4 }}>Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [user, setUser] = useState(null);
   const [myTasks, setMyTasks] = useState([]);
@@ -479,6 +503,7 @@ export default function App() {
   const [showNotes, setShowNotes] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [nudgingId, setNudgingId] = useState(null);
+  const [timePrompt, setTimePrompt] = useState(null);
   const [tab, setTab] = useState("tasks");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -588,6 +613,7 @@ export default function App() {
       await supaFetch(`tasks?id=eq.${taskId}`, { method:"PATCH", body:{ completed:nc } });
       await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${getToday()}`, { method:"PATCH", body:{ completed:nc } });
     } catch (e) { console.error(e); }
+    if (nc >= task.target) { setTimePrompt(taskId); }
   }, [myTasks, user]);
 
   const handleDecrement = useCallback(async (taskId) => {
@@ -605,6 +631,29 @@ export default function App() {
     setMyTasks(prev => prev.filter(t => t.id !== taskId));
     try { await supaFetch(`tasks?id=eq.${taskId}`, { method:"DELETE" }); } catch (e) { console.error(e); }
   }, []);
+
+  const handleFail = useCallback(async (taskId) => {
+    const task = myTasks.find(t => t.id === taskId);
+    if (!task) return;
+    setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, failed: true } : t));
+    try {
+      await supaFetch(`tasks?id=eq.${taskId}`, { method:"PATCH", body:{ failed:true } });
+      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${getToday()}`, { method:"PATCH", body:{ failed:true } });
+    } catch (e) { console.error(e); }
+  }, [myTasks, user]);
+
+  const handleTimeSpent = useCallback(async (taskId, timeStr) => {
+    if (!user) return;
+    const task = myTasks.find(t => t.id === taskId);
+    if (!task) return;
+    setMyTasks(prev => prev.map(t => t.id === taskId ? { ...t, time_spent: timeStr } : t));
+    setTimePrompt(null);
+    if (!timeStr) return;
+    try {
+      await supaFetch(`tasks?id=eq.${taskId}`, { method:"PATCH", body:{ time_spent: timeStr } });
+      await supaFetch(`task_history?user_id=eq.${user.id}&title=eq.${encodeURIComponent(task.title)}&date=eq.${getToday()}`, { method:"PATCH", body:{ time_spent: timeStr } });
+    } catch (e) { console.error(e); }
+  }, [myTasks, user]);
 
   const handleReact = useCallback(async (taskId, emoji) => {
     if (!user) return;
@@ -629,7 +678,11 @@ export default function App() {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-US", { weekday:"long",month:"short",day:"numeric" });
   const myCompleted = myTasks.filter(t => t.completed >= t.target).length;
+  const myFailed = myTasks.filter(t => t.failed).length;
+  const myPct = myTasks.length > 0 ? Math.round((myCompleted / myTasks.length) * 100) : 0;
   const partnerCompleted = partnerTasks.filter(t => t.completed >= t.target).length;
+  const partnerFailed = partnerTasks.filter(t => t.failed).length;
+  const partnerPct = partnerTasks.length > 0 ? Math.round((partnerCompleted / partnerTasks.length) * 100) : 0;
   const allMyDone = myTasks.length > 0 && myCompleted === myTasks.length;
   const allPartnerDone = partnerTasks.length > 0 && partnerCompleted === partnerTasks.length;
 
@@ -651,6 +704,7 @@ export default function App() {
       {showRecap && <RecapScreen userId={user.id} accentColor={myColor} onClose={() => setShowRecap(false)} onAddTaskForDate={(date) => { setAddTaskDate(date); setShowAddTask(true); }} />}
       {showNotes && <NotesScreen user={user} onClose={() => setShowNotes(false)} accentColor={myColor} />}
       {showLogoutConfirm && <LogoutConfirm onConfirm={handleLogout} onCancel={() => setShowLogoutConfirm(false)} />}
+      {timePrompt && <TimePromptModal task={myTasks.find(t => t.id === timePrompt)} accentColor={myColor} onSubmit={(time) => handleTimeSpent(timePrompt, time)} onSkip={() => { setTimePrompt(null); }} />}
 
       <div style={{ padding:"20px 20px 0" }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
@@ -682,8 +736,8 @@ export default function App() {
         <div style={{ display:"flex",gap:12,marginBottom:16,background:"rgba(255,255,255,0.03)",borderRadius:14,padding:"14px 16px",border:"1px solid rgba(255,255,255,0.05)" }}>
           <div style={{ flex:1 }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6 }}>
-              <span style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)" }}>{user.name}</span>
-              <span style={{ fontSize:11,fontWeight:700,color:myColor }}>{myCompleted}/{myTasks.length}</span>
+              <span style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)" }}>{user.name} <span style={{ color:myColor }}>{myPct}%</span></span>
+              <span style={{ fontSize:11,fontWeight:700,color:myColor }}>{myCompleted}/{myTasks.length} ✓{myFailed > 0 && <span style={{ color:"#ff5050",marginLeft:4 }}>{myFailed} ✗</span>}</span>
             </div>
             <div style={{ width:"100%",height:6,background:"rgba(255,255,255,0.06)",borderRadius:3,overflow:"hidden" }}>
               <div style={{ width:`${myTasks.length>0?(myCompleted/myTasks.length)*100:0}%`,height:"100%",borderRadius:3,background:myColor,transition:"width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
@@ -692,8 +746,8 @@ export default function App() {
           <div style={{ width:1,background:"rgba(255,255,255,0.06)" }} />
           <div style={{ flex:1 }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6 }}>
-              <span style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)" }}>{user.partnerName || "Partner"}</span>
-              <span style={{ fontSize:11,fontWeight:700,color:partnerColor }}>{partnerCompleted}/{partnerTasks.length}</span>
+              <span style={{ fontSize:11,fontWeight:600,color:"rgba(255,255,255,0.5)" }}>{user.partnerName || "Partner"} <span style={{ color:partnerColor }}>{partnerPct}%</span></span>
+              <span style={{ fontSize:11,fontWeight:700,color:partnerColor }}>{partnerCompleted}/{partnerTasks.length} ✓{partnerFailed > 0 && <span style={{ color:"#ff5050",marginLeft:4 }}>{partnerFailed} ✗</span>}</span>
             </div>
             <div style={{ width:"100%",height:6,background:"rgba(255,255,255,0.06)",borderRadius:3,overflow:"hidden" }}>
               <div style={{ width:`${partnerTasks.length>0?(partnerCompleted/partnerTasks.length)*100:0}%`,height:"100%",borderRadius:3,background:partnerColor,transition:"width 0.8s cubic-bezier(0.16,1,0.3,1)" }} />
@@ -707,7 +761,7 @@ export default function App() {
           <>
             <div style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase",marginBottom:12 }}>Your Needle Movers</div>
             {myTasks.length === 0 && <div style={{ textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.25)",fontSize:13 }}>No tasks yet - add your first needle mover</div>}
-            {myTasks.map(task => <TaskCard key={task.id} task={task} isOwn={true} accentColor={myColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onReact={handleReact} reactions={reactions} />)}
+            {myTasks.map(task => <TaskCard key={task.id} task={task} isOwn={true} accentColor={myColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onFail={handleFail} onReact={handleReact} reactions={reactions} />)}
             <button onClick={() => { setAddTaskDate(getToday()); setShowAddTask(true); }} style={{ width:"100%",padding:"13px",border:"1px dashed rgba(255,255,255,0.12)",borderRadius:14,background:"transparent",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>+ Add Needle Mover</button>
           </>
         )}
@@ -715,7 +769,7 @@ export default function App() {
           <>
             <div style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase",marginBottom:12 }}>{user.partnerName || "Partner"}'s Needle Movers</div>
             {partnerTasks.length === 0 && <div style={{ textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.25)",fontSize:13 }}>{user.partnerId?"Your partner hasn't set tasks yet today":"No partner connected yet - share your code!"}</div>}
-            {partnerTasks.map(task => <TaskCard key={task.id} task={task} isOwn={false} accentColor={partnerColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onReact={handleReact} reactions={reactions} />)}
+            {partnerTasks.map(task => <TaskCard key={task.id} task={task} isOwn={false} accentColor={partnerColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onFail={handleFail} onReact={handleReact} reactions={reactions} />)}
             {!user.partnerId && (
               <div style={{ background:"rgba(255,255,255,0.04)",borderRadius:14,padding:20,textAlign:"center",border:"1px solid rgba(255,255,255,0.06)",marginTop:16 }}>
                 <div style={{ fontSize:12,color:"rgba(255,255,255,0.35)",marginBottom:8 }}>Share your code with your partner</div>
