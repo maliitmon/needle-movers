@@ -235,7 +235,7 @@ function NotesScreen({ user, onClose, accentColor }) {
   );
 }
 
-function RecapScreen({ userId, accentColor, onClose, onAddTaskForDate }) {
+function RecapScreen({ userId, accentColor, onClose, onAddTaskForDate, onNavigateToDate }) {
   const now = new Date();
   const [viewMonth, setViewMonth] = useState(now.getMonth());
   const [viewYear, setViewYear] = useState(now.getFullYear());
@@ -356,6 +356,7 @@ function RecapScreen({ userId, accentColor, onClose, onAddTaskForDate }) {
               <div style={{ marginTop:20,background:"rgba(255,255,255,0.03)",borderRadius:16,padding:16,border:"1px solid rgba(255,255,255,0.06)" }}>
                 <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
                   <span style={{ fontSize:14,fontWeight:700,color:"#fff" }}>{new Date(selectedDate+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}</span>
+                  {onNavigateToDate && <button onClick={() => onNavigateToDate(selectedDate)} style={{ background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"rgba(255,255,255,0.5)",padding:"6px 12px",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginRight:6 }}>View Day</button>}
                   {selectedDate >= today && <button onClick={() => onAddTaskForDate(selectedDate)} style={{ background:accentColor,border:"none",color:"#fff",padding:"6px 12px",borderRadius:8,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>+ Add Task</button>}
                 </div>
                 {dateLoading ? <div style={{ color:"rgba(255,255,255,0.3)",fontSize:12 }}>Loading...</div> : (
@@ -504,9 +505,18 @@ export default function App() {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [nudgingId, setNudgingId] = useState(null);
   const [timePrompt, setTimePrompt] = useState(null);
+  const [viewDate, setViewDate] = useState(getToday());
   const [tab, setTab] = useState("tasks");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const isViewingToday = viewDate === getToday();
+
+  const shiftDate = (days) => {
+    const d = new Date(viewDate + "T12:00:00");
+    d.setDate(d.getDate() + days);
+    setViewDate(d.toISOString().split("T")[0]);
+  };
+
   const myColor = "#E8573A";
   const partnerColor = "#3A7BE8";
   const todayRef = useRef(getToday());
@@ -549,15 +559,15 @@ export default function App() {
 
   const loadTasks = useCallback(async () => {
     if (!user) return;
-    const currentDay = getToday();
-    todayRef.current = currentDay;
+    todayRef.current = getToday();
+    const targetDay = viewDate;
     setSyncing(true);
     try {
-      let mine = await supaFetch(`tasks?user_id=eq.${user.id}&date=eq.${currentDay}&order=created_at.asc`);
+      let mine = await supaFetch(`tasks?user_id=eq.${user.id}&date=eq.${targetDay}&order=created_at.asc`);
       mine = mine || [];
-      // RECURRING RESET: clone recurring tasks from previous day if none exist today
-      if (mine.length === 0) {
-        const recent = await supaFetch(`tasks?user_id=eq.${user.id}&date=lt.${currentDay}&recurring=eq.true&order=date.desc&limit=20`);
+      // RECURRING RESET: only clone recurring tasks when viewing today
+      if (mine.length === 0 && targetDay === getToday()) {
+        const recent = await supaFetch(`tasks?user_id=eq.${user.id}&date=lt.${targetDay}&recurring=eq.true&order=date.desc&limit=20`);
         if (recent && recent.length > 0) {
           const latestDate = recent[0].date;
           const latestTasks = recent.filter(t => t.date === latestDate);
@@ -565,20 +575,18 @@ export default function App() {
           for (const t of latestTasks) {
             if (seen.has(t.title)) continue;
             seen.add(t.title);
-            const newTask = await supaFetch("tasks", { method:"POST", body:{ user_id:user.id, title:t.title, target:t.target, completed:0, unit:t.unit, recurring:true, date:currentDay } });
+            const newTask = await supaFetch("tasks", { method:"POST", body:{ user_id:user.id, title:t.title, target:t.target, completed:0, unit:t.unit, recurring:true, date:targetDay } });
             if (newTask && newTask[0]) mine.push(newTask[0]);
-            await supaFetch("task_history", { method:"POST", body:{ user_id:user.id, title:t.title, target:t.target, completed:0, unit:t.unit, date:currentDay, recurring:true } });
+            await supaFetch("task_history", { method:"POST", body:{ user_id:user.id, title:t.title, target:t.target, completed:0, unit:t.unit, date:targetDay, recurring:true } });
           }
         }
-        // Re-fetch to include any pre-scheduled tasks
-        const fresh = await supaFetch(`tasks?user_id=eq.${user.id}&date=eq.${currentDay}&order=created_at.asc`);
+        const fresh = await supaFetch(`tasks?user_id=eq.${user.id}&date=eq.${targetDay}&order=created_at.asc`);
         if (fresh && fresh.length > 0) mine = fresh;
       }
       setMyTasks(mine);
       if (user.partnerId) {
-        const theirs = await supaFetch(`tasks?user_id=eq.${user.partnerId}&date=eq.${currentDay}&order=created_at.asc`);
+        const theirs = await supaFetch(`tasks?user_id=eq.${user.partnerId}&date=eq.${targetDay}&order=created_at.asc`);
         setPartnerTasks(theirs || []);
-        // Load reactions
         const allTaskIds = [...mine, ...(theirs||[])].filter(t => t.completed >= t.target).map(t => t.id);
         if (allTaskIds.length > 0) {
           const rxns = await supaFetch(`reactions?task_id=in.(${allTaskIds.join(",")})`);
@@ -587,10 +595,10 @@ export default function App() {
       }
     } catch (e) { console.error(e); }
     setSyncing(false);
-  }, [user]);
+  }, [user, viewDate]);
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
-  useEffect(() => { if (!user) return; const i = setInterval(loadTasks, 10000); return () => clearInterval(i); }, [user, loadTasks]);
+  useEffect(() => { if (!user || !isViewingToday) return; const i = setInterval(loadTasks, 10000); return () => clearInterval(i); }, [user, loadTasks, isViewingToday]);
 
   const handleLogin = useCallback((userData) => { setUser(userData); setLoading(false); }, []);
 
@@ -599,7 +607,7 @@ export default function App() {
     const dateToUse = targetDate || getToday();
     try {
       const newTask = await supaFetch("tasks", { method:"POST", body:{ user_id:user.id, title:task.title, target:task.target, completed:0, unit:task.unit, recurring:task.recurring, date:dateToUse } });
-      if (newTask && dateToUse === getToday()) setMyTasks(prev => [...prev, ...newTask]);
+      if (newTask && dateToUse === viewDate) setMyTasks(prev => [...prev, ...newTask]);
       await supaFetch("task_history", { method:"POST", body:{ user_id:user.id, title:task.title, target:task.target, completed:0, unit:task.unit, date:dateToUse, recurring:task.recurring } });
     } catch (e) { console.error(e); }
   }, [user]);
@@ -675,8 +683,8 @@ export default function App() {
 
   const handleLogout = useCallback(() => { storage.remove("nm-session"); setUser(null); setMyTasks([]); setPartnerTasks([]); setReactions([]); setShowLogoutConfirm(false); }, []);
 
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("en-US", { weekday:"long",month:"short",day:"numeric" });
+  const viewDateObj = new Date(viewDate + "T12:00:00");
+  const dateStr = viewDateObj.toLocaleDateString("en-US", { weekday:"long",month:"short",day:"numeric" });
   const myCompleted = myTasks.filter(t => t.completed >= t.target).length;
   const myFailed = myTasks.filter(t => t.failed).length;
   const myPct = myTasks.length > 0 ? Math.round((myCompleted / myTasks.length) * 100) : 0;
@@ -701,7 +709,7 @@ export default function App() {
 
       {nudgeMsg && <NudgePopup message={nudgeMsg} onClose={() => setNudgeMsg(null)} />}
       {showAddTask && <AddTaskModal onAdd={handleAddTask} onClose={() => { setShowAddTask(false); setAddTaskDate(null); }} accentColor={myColor} targetDate={addTaskDate || getToday()} />}
-      {showRecap && <RecapScreen userId={user.id} accentColor={myColor} onClose={() => setShowRecap(false)} onAddTaskForDate={(date) => { setAddTaskDate(date); setShowAddTask(true); }} />}
+      {showRecap && <RecapScreen userId={user.id} accentColor={myColor} onClose={() => setShowRecap(false)} onAddTaskForDate={(date) => { setAddTaskDate(date); setShowAddTask(true); }} onNavigateToDate={(date) => { setViewDate(date); setShowRecap(false); }} />}
       {showNotes && <NotesScreen user={user} onClose={() => setShowNotes(false)} accentColor={myColor} />}
       {showLogoutConfirm && <LogoutConfirm onConfirm={handleLogout} onCancel={() => setShowLogoutConfirm(false)} />}
       {timePrompt && <TimePromptModal task={myTasks.find(t => t.id === timePrompt)} accentColor={myColor} onSubmit={(time) => handleTimeSpent(timePrompt, time)} onSkip={() => { setTimePrompt(null); }} />}
@@ -709,7 +717,12 @@ export default function App() {
       <div style={{ padding:"20px 20px 0" }}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20 }}>
           <div style={{ flex:1 }}>
-            <div style={{ fontSize:11,color:"rgba(255,255,255,0.3)",fontWeight:500,marginBottom:2 }}>{dateStr}</div>
+            <div style={{ display:"flex",alignItems:"center",gap:8,marginBottom:2 }}>
+              <button onClick={() => shiftDate(-1)} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:14,padding:0,fontWeight:700 }}>{"←"}</button>
+              <span style={{ fontSize:11,color:isViewingToday?"rgba(255,255,255,0.3)":myColor,fontWeight:isViewingToday?500:700 }}>{dateStr}</span>
+              <button onClick={() => shiftDate(1)} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.4)",cursor:"pointer",fontSize:14,padding:0,fontWeight:700 }}>{"→"}</button>
+              {!isViewingToday && <button onClick={() => setViewDate(getToday())} style={{ background:myColor,border:"none",color:"#fff",padding:"2px 8px",borderRadius:6,cursor:"pointer",fontSize:9,fontWeight:700,fontFamily:"'DM Sans',sans-serif" }}>TODAY</button>}
+            </div>
             <div style={{ fontSize:24,fontWeight:700,letterSpacing:-0.5 }}>Needle Movers</div>
           </div>
           <div style={{ display:"flex",gap:6,alignItems:"center" }}>
@@ -724,7 +737,7 @@ export default function App() {
         {allMyDone && tab === "tasks" && (
           <div style={{ background:`linear-gradient(135deg,${myColor}22,${myColor}11)`,border:`1px solid ${myColor}33`,borderRadius:14,padding:"12px 16px",marginBottom:16,textAlign:"center",animation:"celebrate 0.6s ease" }}>
             <span style={{ fontSize:14,fontWeight:700,color:myColor }}>🎉 All tasks completed!</span>
-            <div style={{ fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2 }}>{user.name} crushed it today</div>
+            <div style={{ fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:2 }}>{user.name} crushed it{isViewingToday ? " today" : ""}!</div>
           </div>
         )}
         {allPartnerDone && tab === "partner" && (
@@ -759,10 +772,14 @@ export default function App() {
       <div style={{ padding:"0 20px" }}>
         {tab === "tasks" && (
           <>
-            <div style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase",marginBottom:12 }}>Your Needle Movers</div>
+            <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
+              <span style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase" }}>Your Needle Movers</span>
+              {!isViewingToday && viewDate < getToday() && <span style={{ fontSize:9,fontWeight:600,color:"rgba(255,255,255,0.25)",fontFamily:"'DM Sans',sans-serif" }}>PAST - READ ONLY</span>}
+              {!isViewingToday && viewDate > getToday() && <span style={{ fontSize:9,fontWeight:600,color:myColor,fontFamily:"'DM Sans',sans-serif" }}>SCHEDULED</span>}
+            </div>
             {myTasks.length === 0 && <div style={{ textAlign:"center",padding:"40px 20px",color:"rgba(255,255,255,0.25)",fontSize:13 }}>No tasks yet - add your first needle mover</div>}
-            {myTasks.map(task => <TaskCard key={task.id} task={task} isOwn={true} accentColor={myColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onFail={handleFail} onReact={handleReact} reactions={reactions} />)}
-            <button onClick={() => { setAddTaskDate(getToday()); setShowAddTask(true); }} style={{ width:"100%",padding:"13px",border:"1px dashed rgba(255,255,255,0.12)",borderRadius:14,background:"transparent",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>+ Add Needle Mover</button>
+            {myTasks.map(task => <TaskCard key={task.id} task={task} isOwn={isViewingToday} accentColor={myColor} onIncrement={handleIncrement} onDecrement={handleDecrement} onNudge={handleNudge} nudging={nudgingId === task.id} onDelete={handleDeleteTask} onFail={handleFail} onReact={handleReact} reactions={reactions} />)}
+            <button onClick={() => { setAddTaskDate(viewDate); setShowAddTask(true); }} style={{ width:"100%",padding:"13px",border:"1px dashed rgba(255,255,255,0.12)",borderRadius:14,background:"transparent",color:"rgba(255,255,255,0.3)",fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif" }}>+ Add Needle Mover</button>
           </>
         )}
         {tab === "partner" && (
