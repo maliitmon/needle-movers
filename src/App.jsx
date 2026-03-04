@@ -20,7 +20,11 @@ const storage = {
   remove: (key) => { try { localStorage.removeItem(key); } catch {} },
 };
 
-const getToday = () => new Date().toISOString().split("T")[0];
+const getToday = () => {
+  const now = new Date();
+  const eastern = new Date(now.toLocaleString("en-US", { timeZone: "America/Toronto" }));
+  return eastern.getFullYear() + "-" + String(eastern.getMonth() + 1).padStart(2, "0") + "-" + String(eastern.getDate()).padStart(2, "0");
+};
 const getMonthDays = (year, month) => Array.from({ length: new Date(year, month + 1, 0).getDate() }, (_, i) => i + 1);
 const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const DAY_NAMES = ["S","M","T","W","T","F","S"];
@@ -509,6 +513,9 @@ export default function App() {
   const [tab, setTab] = useState("tasks");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [weekTasks, setWeekTasks] = useState([]);
+  const [newWeekTask, setNewWeekTask] = useState("");
+  const [showWeekInput, setShowWeekInput] = useState(false);
   const isViewingToday = viewDate === getToday();
 
   const shiftDate = (days) => {
@@ -599,6 +606,43 @@ export default function App() {
 
   useEffect(() => { loadTasks(); }, [loadTasks]);
   useEffect(() => { if (!user || !isViewingToday) return; const i = setInterval(loadTasks, 10000); return () => clearInterval(i); }, [user, loadTasks, isViewingToday]);
+
+  // Load week tasks from Supabase
+  useEffect(() => {
+    if (!user) return;
+    const loadWeekTasks = async () => {
+      try {
+        const data = await supaFetch(`week_tasks?user_id=eq.${user.id}&order=created_at.asc`);
+        setWeekTasks(data || []);
+      } catch (e) { console.error(e); }
+    };
+    loadWeekTasks();
+  }, [user]);
+
+  const handleAddWeekTask = useCallback(async (title) => {
+    if (!user || !title.trim()) return;
+    try {
+      const result = await supaFetch("week_tasks", { method: "POST", body: { user_id: user.id, title: title.trim(), done: false } });
+      if (result) setWeekTasks(prev => [...prev, ...result]);
+    } catch (e) { console.error(e); }
+  }, [user]);
+
+  const handleToggleWeekTask = useCallback(async (taskId) => {
+    const task = weekTasks.find(t => t.id === taskId);
+    if (!task) return;
+    const newDone = !task.done;
+    setWeekTasks(prev => prev.map(t => t.id === taskId ? { ...t, done: newDone } : t));
+    try {
+      await supaFetch(`week_tasks?id=eq.${taskId}`, { method: "PATCH", body: { done: newDone } });
+    } catch (e) { console.error(e); }
+  }, [weekTasks]);
+
+  const handleDeleteWeekTask = useCallback(async (taskId) => {
+    setWeekTasks(prev => prev.filter(t => t.id !== taskId));
+    try {
+      await supaFetch(`week_tasks?id=eq.${taskId}`, { method: "DELETE" });
+    } catch (e) { console.error(e); }
+  }, []);
 
   const handleLogin = useCallback((userData) => { setUser(userData); setLoading(false); }, []);
 
@@ -772,6 +816,38 @@ export default function App() {
       <div style={{ padding:"0 20px" }}>
         {tab === "tasks" && (
           <>
+            {/* WEEK TASKS SECTION */}
+            <div style={{ marginBottom:20 }}>
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
+                <span style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase" }}>Week Tasks</span>
+                <span style={{ fontSize:10,color:"rgba(255,255,255,0.2)" }}>{weekTasks.filter(t => t.done).length}/{weekTasks.length} done</span>
+              </div>
+              {weekTasks.length === 0 && !showWeekInput && (
+                <div style={{ textAlign:"center",padding:"16px 20px",color:"rgba(255,255,255,0.2)",fontSize:12 }}>No weekly reminders yet</div>
+              )}
+              {weekTasks.map(task => (
+                <div key={task.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:task.done?"rgba(232,87,58,0.05)":"rgba(255,255,255,0.03)",border:task.done?`1px solid ${myColor}15`:"1px solid rgba(255,255,255,0.06)",borderRadius:12,marginBottom:6,transition:"all 0.2s" }}>
+                  <div onClick={() => handleToggleWeekTask(task.id)} style={{ width:22,height:22,borderRadius:6,border:task.done?`2px solid ${myColor}`:"2px solid rgba(255,255,255,0.15)",background:task.done?myColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all 0.2s" }}>
+                    {task.done && <span style={{ color:"#fff",fontSize:12,fontWeight:700 }}>✓</span>}
+                  </div>
+                  <span style={{ flex:1,fontSize:13,fontWeight:500,color:task.done?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.8)",textDecoration:task.done?"line-through":"none",fontFamily:"'DM Sans',sans-serif",transition:"all 0.2s" }}>{task.title}</span>
+                  <button onClick={() => handleDeleteWeekTask(task.id)} style={{ background:"none",border:"none",color:"rgba(255,255,255,0.15)",cursor:"pointer",fontSize:14,padding:"2px 4px",flexShrink:0 }}>✕</button>
+                </div>
+              ))}
+              {showWeekInput ? (
+                <div style={{ display:"flex",gap:8,marginTop:4 }}>
+                  <input value={newWeekTask} onChange={e => setNewWeekTask(e.target.value)} placeholder="Weekly reminder..." autoFocus onKeyDown={e => { if (e.key === "Enter" && newWeekTask.trim()) { handleAddWeekTask(newWeekTask); setNewWeekTask(""); setShowWeekInput(false); } if (e.key === "Escape") { setShowWeekInput(false); setNewWeekTask(""); } }} style={{ flex:1,padding:"10px 12px",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:10,color:"#fff",fontSize:13,fontFamily:"'DM Sans',sans-serif",outline:"none" }} />
+                  <button onClick={() => { if (newWeekTask.trim()) { handleAddWeekTask(newWeekTask); setNewWeekTask(""); setShowWeekInput(false); } }} style={{ background:myColor,border:"none",color:"#fff",padding:"10px 14px",borderRadius:10,cursor:"pointer",fontSize:12,fontWeight:600,fontFamily:"'DM Sans',sans-serif" }}>Add</button>
+                </div>
+              ) : (
+                <button onClick={() => setShowWeekInput(true)} style={{ width:"100%",padding:"10px",border:"1px dashed rgba(255,255,255,0.08)",borderRadius:10,background:"transparent",color:"rgba(255,255,255,0.2)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:2 }}>+ Add Week Task</button>
+              )}
+            </div>
+
+            {/* DIVIDER */}
+            <div style={{ height:1,background:"rgba(255,255,255,0.06)",marginBottom:16 }} />
+
+            {/* MY TASKS SECTION */}
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
               <span style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase" }}>Your Needle Movers</span>
               {!isViewingToday && viewDate < getToday() && <span style={{ fontSize:9,fontWeight:600,color:"rgba(255,255,255,0.25)",fontFamily:"'DM Sans',sans-serif" }}>PAST - READ ONLY</span>}
