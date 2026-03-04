@@ -530,28 +530,6 @@ export default function App() {
   const touchStartX = useRef(null);
   const touchStartY = useRef(null);
 
-  const handleTouchStart = useCallback((e) => {
-    touchStartX.current = e.touches[0].clientX;
-    touchStartY.current = e.touches[0].clientY;
-  }, []);
-
-  const handleTouchEnd = useCallback((e) => {
-    if (touchStartX.current === null) return;
-    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
-    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
-    // Only trigger if horizontal swipe is dominant and long enough
-    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-      if (deltaX < 0 && tab === "tasks") {
-        setTab("partner");
-        loadTasks();
-      } else if (deltaX > 0 && tab === "partner") {
-        setTab("tasks");
-      }
-    }
-    touchStartX.current = null;
-    touchStartY.current = null;
-  }, [tab, loadTasks]);
-
   // Midnight rollover check
   useEffect(() => {
     const check = setInterval(() => {
@@ -631,7 +609,25 @@ export default function App() {
   useEffect(() => { loadTasks(); }, [loadTasks]);
   useEffect(() => { if (!user || !isViewingToday) return; const i = setInterval(loadTasks, 10000); return () => clearInterval(i); }, [user, loadTasks, isViewingToday]);
 
-  // Load week tasks from Supabase
+  // Swipe handlers
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (touchStartX.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX < 0 && tab === "tasks") { setTab("partner"); loadTasks(); }
+      else if (deltaX > 0 && tab === "partner") { setTab("tasks"); }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, [tab, loadTasks]);
+
+  // Week tasks
   useEffect(() => {
     if (!user) return;
     const loadWeekTasks = async () => {
@@ -656,16 +652,12 @@ export default function App() {
     if (!task) return;
     const newDone = !task.done;
     setWeekTasks(prev => prev.map(t => t.id === taskId ? { ...t, done: newDone } : t));
-    try {
-      await supaFetch(`week_tasks?id=eq.${taskId}`, { method: "PATCH", body: { done: newDone } });
-    } catch (e) { console.error(e); }
+    try { await supaFetch(`week_tasks?id=eq.${taskId}`, { method: "PATCH", body: { done: newDone } }); } catch (e) { console.error(e); }
   }, [weekTasks]);
 
   const handleDeleteWeekTask = useCallback(async (taskId) => {
     setWeekTasks(prev => prev.filter(t => t.id !== taskId));
-    try {
-      await supaFetch(`week_tasks?id=eq.${taskId}`, { method: "DELETE" });
-    } catch (e) { console.error(e); }
+    try { await supaFetch(`week_tasks?id=eq.${taskId}`, { method: "DELETE" }); } catch (e) { console.error(e); }
   }, []);
 
   const handleLogin = useCallback((userData) => { setUser(userData); setLoading(false); }, []);
@@ -840,7 +832,6 @@ export default function App() {
       <div style={{ padding:"0 20px" }} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {tab === "tasks" && (
           <>
-            {/* WEEK TASKS SECTION */}
             <div style={{ marginBottom:20 }}>
               <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10 }}>
                 <span style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase" }}>Week Tasks</span>
@@ -850,8 +841,8 @@ export default function App() {
                 <div style={{ textAlign:"center",padding:"16px 20px",color:"rgba(255,255,255,0.2)",fontSize:12 }}>No weekly reminders yet</div>
               )}
               {weekTasks.map(task => (
-                <div key={task.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:task.done?"rgba(232,87,58,0.05)":"rgba(255,255,255,0.03)",border:task.done?`1px solid ${myColor}15`:"1px solid rgba(255,255,255,0.06)",borderRadius:12,marginBottom:6,transition:"all 0.2s" }}>
-                  <div onClick={() => handleToggleWeekTask(task.id)} style={{ width:22,height:22,borderRadius:6,border:task.done?`2px solid ${myColor}`:"2px solid rgba(255,255,255,0.15)",background:task.done?myColor:"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all 0.2s" }}>
+                <div key={task.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:task.done?"rgba(74,222,128,0.06)":"rgba(255,255,255,0.03)",border:task.done?"1px solid rgba(74,222,128,0.15)":"1px solid rgba(255,255,255,0.06)",borderRadius:12,marginBottom:6,transition:"all 0.2s" }}>
+                  <div onClick={() => handleToggleWeekTask(task.id)} style={{ width:22,height:22,borderRadius:6,border:task.done?"2px solid #4ade80":"2px solid rgba(255,255,255,0.15)",background:task.done?"#4ade80":"transparent",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,transition:"all 0.2s" }}>
                     {task.done && <span style={{ color:"#fff",fontSize:12,fontWeight:700 }}>✓</span>}
                   </div>
                   <span style={{ flex:1,fontSize:13,fontWeight:500,color:task.done?"rgba(255,255,255,0.35)":"rgba(255,255,255,0.8)",textDecoration:task.done?"line-through":"none",fontFamily:"'DM Sans',sans-serif",transition:"all 0.2s" }}>{task.title}</span>
@@ -867,11 +858,7 @@ export default function App() {
                 <button onClick={() => setShowWeekInput(true)} style={{ width:"100%",padding:"10px",border:"1px dashed rgba(255,255,255,0.08)",borderRadius:10,background:"transparent",color:"rgba(255,255,255,0.2)",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",marginTop:2 }}>+ Add Week Task</button>
               )}
             </div>
-
-            {/* DIVIDER */}
             <div style={{ height:1,background:"rgba(255,255,255,0.06)",marginBottom:16 }} />
-
-            {/* MY TASKS SECTION */}
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12 }}>
               <span style={{ fontSize:10,fontWeight:700,letterSpacing:1.5,color:"rgba(255,255,255,0.3)",textTransform:"uppercase" }}>Your Needle Movers</span>
               {!isViewingToday && viewDate < getToday() && <span style={{ fontSize:9,fontWeight:600,color:"rgba(255,255,255,0.25)",fontFamily:"'DM Sans',sans-serif" }}>PAST - READ ONLY</span>}
