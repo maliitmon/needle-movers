@@ -80,11 +80,11 @@ function TaskCard({ task, isOwn, accentColor, onIncrement, onDecrement, onNudge,
   const taskReactions = reactions?.filter(r => r.task_id === task.id) || [];
   const createdLabel = formatCreatedDate(task.created_at);
   return (
-    <div style={{ background:isFailed?"rgba(255,80,80,0.05)":isDone?`${accentColor}0a`:"rgba(255,255,255,0.03)",border:isFailed?"1px solid rgba(255,80,80,0.15)":isDone?`1px solid ${accentColor}22`:"1px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"14px 16px",marginBottom:10,transition:"all 0.3s ease" }}>
+    <div style={{ background:isFailed?"rgba(255,80,80,0.05)":isDone?"rgba(74,222,128,0.08)":"rgba(255,255,255,0.03)",border:isFailed?"1px solid rgba(255,80,80,0.15)":isDone?"1px solid rgba(74,222,128,0.2)":"1px solid rgba(255,255,255,0.06)",borderRadius:16,padding:"14px 16px",marginBottom:10,transition:"all 0.3s ease" }}>
       <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
         <div style={{ flex:1,cursor:isOwn?"pointer":"default" }} onClick={() => isOwn && setShowActions(!showActions)}>
           <div style={{ display:"flex",alignItems:"center",gap:8,flexWrap:"wrap" }}>
-            {isDone && <span style={{ fontSize:14,color:accentColor }}>✓</span>}
+            {isDone && <span style={{ fontSize:14,color:"#4ade80" }}>✓</span>}
             {isFailed && <span style={{ fontSize:14,color:"#ff5050" }}>✗</span>}
             <span style={{ fontSize:14,fontWeight:600,color:isFailed?"rgba(255,255,255,0.35)":isDone?"rgba(255,255,255,0.5)":"#fff",textDecoration:(isDone||isFailed)?"line-through":"none",fontFamily:"'DM Sans',sans-serif" }}>{task.title}</span>
             {task.recurring && <span style={{ fontSize:9,fontWeight:700,color:accentColor,background:`${accentColor}15`,padding:"2px 6px",borderRadius:4,letterSpacing:0.5,fontFamily:"'DM Sans',sans-serif" }}>DAILY</span>}
@@ -103,7 +103,7 @@ function TaskCard({ task, isOwn, accentColor, onIncrement, onDecrement, onNudge,
               <button onClick={() => onIncrement(task.id)} style={{ background:accentColor,border:"none",color:"#fff",width:32,height:32,borderRadius:9,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,fontWeight:700,boxShadow:`0 4px 12px ${accentColor}33` }}>+</button>
             </>
           )}
-          {isOwn && isDone && <span style={{ fontSize:11,color:accentColor,fontWeight:600,fontFamily:"'DM Sans',sans-serif" }}>Done!</span>}
+          {isOwn && isDone && <span style={{ fontSize:11,color:"#4ade80",fontWeight:600,fontFamily:"'DM Sans',sans-serif" }}>Done!</span>}
           {isOwn && isFailed && <span style={{ fontSize:11,color:"#ff5050",fontWeight:600,fontFamily:"'DM Sans',sans-serif" }}>Failed</span>}
           {!isOwn && !isDone && !isFailed && <button onClick={() => onNudge(task)} disabled={nudging} style={{ background:nudging?`${accentColor}33`:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#fff",padding:"7px 12px",borderRadius:9,cursor:"pointer",fontSize:11,fontWeight:600,fontFamily:"'DM Sans',sans-serif",opacity:nudging?0.5:1 }}>{nudging?"Sent!":"👊 Nudge"}</button>}
           {!isOwn && isDone && <button onClick={() => setShowReactions(!showReactions)} style={{ background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",color:"#fff",padding:"7px 10px",borderRadius:9,cursor:"pointer",fontSize:14 }}>😊</button>}
@@ -527,6 +527,30 @@ export default function App() {
   const myColor = "#E8573A";
   const partnerColor = "#3A7BE8";
   const todayRef = useRef(getToday());
+  const touchStartX = useRef(null);
+  const touchStartY = useRef(null);
+
+  const handleTouchStart = useCallback((e) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  }, []);
+
+  const handleTouchEnd = useCallback((e) => {
+    if (touchStartX.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartY.current;
+    // Only trigger if horizontal swipe is dominant and long enough
+    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX < 0 && tab === "tasks") {
+        setTab("partner");
+        loadTasks();
+      } else if (deltaX > 0 && tab === "partner") {
+        setTab("tasks");
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  }, [tab, loadTasks]);
 
   // Midnight rollover check
   useEffect(() => {
@@ -813,7 +837,7 @@ export default function App() {
         </div>
       </div>
 
-      <div style={{ padding:"0 20px" }}>
+      <div style={{ padding:"0 20px" }} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
         {tab === "tasks" && (
           <>
             {/* WEEK TASKS SECTION */}
@@ -873,9 +897,15 @@ export default function App() {
         )}
       </div>
 
-      <div style={{ position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"linear-gradient(transparent,#0d0d1a 30%)",padding:"20px 20px 24px",display:"flex",gap:6 }}>
-        <button onClick={() => setTab("tasks")} style={{ flex:1,padding:"12px",border:"none",borderRadius:12,background:tab==="tasks"?myColor:"rgba(255,255,255,0.06)",color:tab==="tasks"?"#fff":"rgba(255,255,255,0.4)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:tab==="tasks"?`0 4px 16px ${myColor}33`:"none" }}>My Tasks</button>
-        <button onClick={() => { setTab("partner"); loadTasks(); }} style={{ flex:1,padding:"12px",border:"none",borderRadius:12,background:tab==="partner"?partnerColor:"rgba(255,255,255,0.06)",color:tab==="partner"?"#fff":"rgba(255,255,255,0.4)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:tab==="partner"?`0 4px 16px ${partnerColor}33`:"none" }}>Partner</button>
+      <div style={{ position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:480,background:"linear-gradient(transparent,#0d0d1a 30%)",padding:"20px 20px 24px" }}>
+        <div style={{ display:"flex",justifyContent:"center",alignItems:"center",gap:8,marginBottom:10 }}>
+          <div style={{ width:8,height:8,borderRadius:4,background:tab==="tasks"?myColor:"rgba(255,255,255,0.15)",transition:"all 0.3s" }} />
+          <div style={{ width:8,height:8,borderRadius:4,background:tab==="partner"?partnerColor:"rgba(255,255,255,0.15)",transition:"all 0.3s" }} />
+        </div>
+        <div style={{ display:"flex",gap:6 }}>
+          <button onClick={() => setTab("tasks")} style={{ flex:1,padding:"12px",border:"none",borderRadius:12,background:tab==="tasks"?myColor:"rgba(255,255,255,0.06)",color:tab==="tasks"?"#fff":"rgba(255,255,255,0.4)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:tab==="tasks"?`0 4px 16px ${myColor}33`:"none",transition:"all 0.3s" }}>My Tasks</button>
+          <button onClick={() => { setTab("partner"); loadTasks(); }} style={{ flex:1,padding:"12px",border:"none",borderRadius:12,background:tab==="partner"?partnerColor:"rgba(255,255,255,0.06)",color:tab==="partner"?"#fff":"rgba(255,255,255,0.4)",fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"'DM Sans',sans-serif",boxShadow:tab==="partner"?`0 4px 16px ${partnerColor}33`:"none",transition:"all 0.3s" }}>Partner</button>
+        </div>
       </div>
     </div>
   );
